@@ -1,4 +1,5 @@
 # my-algo-rust-adapter
+![Continuous integration](https://github.com/i-schuetz/my-algo-rust-adapter/actions/workflows/actions.yml/badge.svg)
 
 Rust wrapper library to use [My Algo wallet](https://github.com/randlabs/myalgo-connect) in Rust WASM apps.
 
