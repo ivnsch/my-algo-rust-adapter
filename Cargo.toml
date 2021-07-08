@@ -1,0 +1,17 @@
+[package]
+name = "my-algo"
+version = "0.1.0"
+authors = ["Ivan Schuetz <ivanhp978@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+algonaut = { git = "https://github.com/manuelmauro/algonaut", branch = "main" }
+wasm-bindgen = "0.2.74"
+wasm-bindgen-futures = "0.4.24"
+js-sys = "0.3.51"
+log = "0.4"
+serde = {version = "1.0", features = ["derive"]}
+anyhow = "1.0"
+data-encoding = "2.3.1"
+serde_with = "1.9.4"
+serde_json = "1.0.64"
