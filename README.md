@@ -10,7 +10,7 @@ my-algo = { git = "https://github.com/i-schuetz/my-algo-rust-adapter", branch = 
 
 (Releases and publishing to crates.io on demand)
 
-Last tested My Algo version: 1.0.2
+Last tested My Algo version: 1.0.1
 
 Currently [My Algo is not bundled](https://github.com/i-schuetz/my-algo-rust-adapter/issues/3). It's recommended to use this [template project](https://github.com/i-schuetz/algonaut-myalgo-yew-template), which works out of the box.
 
