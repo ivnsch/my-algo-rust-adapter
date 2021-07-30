@@ -1,4 +1,7 @@
-use algonaut::transaction::{Transaction, TransactionType};
+use algonaut::{
+    core::Address,
+    transaction::{transaction::AssetParams, Transaction, TransactionType},
+};
 use anyhow::{anyhow, Result};
 use data_encoding::{BASE32, BASE64};
 use serde_json::Value;
@@ -23,7 +26,6 @@ fn to_my_algo_transaction_common_fields(t: &Transaction) -> Result<Value> {
         firstRound: t.first_valid.0,
         genesisHash: BASE64.encode(&t.genesis_hash.0),
         lastRound: t.last_valid.0,
-        from: t.sender.to_string(),
         genesisId: t.genesis_id.clone(),
         group: t.group.map(|d| BASE64.encode(&d.0)),
         lease: t.lease.map(|d| BASE64.encode(&d.0)),
@@ -36,12 +38,14 @@ fn to_my_algo_transaction_common_fields(t: &Transaction) -> Result<Value> {
 fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
     match &t.txn_type {
         TransactionType::Payment(p) => Ok(serde_json::to_value(&MyAlgoPaymentTransactionFields {
+            from: p.sender.to_string(),
             amount: p.amount.0,
             to: p.receiver.to_string(),
             closeRemainderTo: p.close_remainder_to.map(|a| a.to_string()),
         })?),
         TransactionType::KeyRegistration(r) => Ok(serde_json::to_value(
             &MyAlgoKeyRegistrationTransactionFields {
+                from: r.sender.to_string(),
                 voteKey: r.vote_pk.map(|v| BASE32.encode(&v.0)),
                 selectionKey: r.selection_pk.map(|s| BASE32.encode(&s.0)),
                 voteFirst: r.vote_first.map(|r| r.0),
@@ -50,23 +54,11 @@ fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
             },
         )?),
         TransactionType::AssetConfigurationTransaction(c) => Ok(serde_json::to_value(
-            &MyAlgoAssetConfigurationTransactionFields {
-                assetName: c.params.asset_name.clone(),
-                assetUnitName: c.params.unit_name.clone(),
-                // TODO make optional in algonaut
-                assetDecimals: Some(c.params.decimals),
-                // TODO make optional in algonaut
-                assetTotal: Some(c.params.total),
-                assetURL: c.params.url.clone(),
-                assetFreeze: c.params.freeze.map(|a| a.to_string()),
-                assetManager: c.params.manager.map(|a| a.to_string()),
-                assetReserve: c.params.reserve.map(|a| a.to_string()),
-                // TODO make optional in algonaut
-                assetDefaultFrozen: Some(c.params.default_frozen),
-            },
+            to_my_algo_asset_configuration_transaction_fields(c.sender, c.params.clone()),
         )?),
         TransactionType::AssetTransferTransaction(t) => Ok(serde_json::to_value(
             &MyAlgoAssetTransferTransactionFields {
+                from: t.sender.to_string(),
                 assetIndex: t.xfer,
                 to: t.receiver.to_string(),
                 amount: Some(t.amount),
@@ -76,8 +68,9 @@ fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
         )?),
         TransactionType::AssetAcceptTransaction(t) => Ok(serde_json::to_value(
             &MyAlgoAssetTransferTransactionFields {
+                from: t.sender.to_string(),
                 assetIndex: t.xfer,
-                to: t.receiver.to_string(),
+                to: t.sender.to_string(),
                 amount: None,
                 closeRemainderTo: None,
                 assetSender: None,
@@ -85,6 +78,7 @@ fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
         )?),
         TransactionType::AssetClawbackTransaction(t) => Ok(serde_json::to_value(
             &MyAlgoAssetTransferTransactionFields {
+                from: t.sender.to_string(),
                 assetIndex: t.xfer,
                 to: t.asset_receiver.to_string(),
                 amount: Some(t.asset_amount),
@@ -94,6 +88,7 @@ fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
         )?),
         TransactionType::AssetFreezeTransaction(t) => {
             Ok(serde_json::to_value(&MyAlgoAssetFreezeTransactionFields {
+                from: t.sender.to_string(),
                 assetIndex: t.asset_id,
                 freezeAccount: t.freeze_account.to_string(),
                 freezeState: t.frozen,
@@ -125,8 +120,7 @@ struct MyAlgoTransactionCommonFields {
     firstRound: u64,
     genesisHash: String,
     lastRound: u64,
-    from: String,
-    genesisId: String,
+    genesisId: Option<String>,
     group: Option<String>,
     lease: Option<String>,
     note: Option<Vec<u8>>,
@@ -139,6 +133,7 @@ struct MyAlgoTransactionCommonFields {
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[allow(non_snake_case)]
 struct MyAlgoPaymentTransactionFields {
+    from: String,
     amount: u64,
     to: String,
     closeRemainderTo: Option<String>,
@@ -148,6 +143,7 @@ struct MyAlgoPaymentTransactionFields {
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[allow(non_snake_case)]
 struct MyAlgoKeyRegistrationTransactionFields {
+    from: String,
     voteKey: Option<String>,
     selectionKey: Option<String>,
     voteFirst: Option<u64>,
@@ -159,6 +155,7 @@ struct MyAlgoKeyRegistrationTransactionFields {
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[allow(non_snake_case)]
 struct MyAlgoAssetConfigurationTransactionFields {
+    from: String,
     assetName: Option<String>,
     assetUnitName: Option<String>,
     assetDecimals: Option<u32>,
@@ -175,6 +172,7 @@ struct MyAlgoAssetConfigurationTransactionFields {
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[allow(non_snake_case)]
 struct MyAlgoAssetTransferTransactionFields {
+    from: String,
     assetIndex: u64,
     to: String,
     amount: Option<u64>,
@@ -186,6 +184,7 @@ struct MyAlgoAssetTransferTransactionFields {
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[allow(non_snake_case)]
 struct MyAlgoAssetFreezeTransactionFields {
+    from: String,
     assetIndex: u64,
     freezeAccount: String,
     freezeState: bool,
@@ -195,9 +194,42 @@ struct MyAlgoAssetFreezeTransactionFields {
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[allow(non_snake_case)]
 struct MyAlgoApplicationCallTransactionFields {
+    from: String,
     assetIndex: u64,
     freezeAccount: String,
     freezeState: bool,
+}
+
+fn to_my_algo_asset_configuration_transaction_fields(
+    sender: Address,
+    params: Option<AssetParams>,
+) -> MyAlgoAssetConfigurationTransactionFields {
+    match params {
+        Some(p) => MyAlgoAssetConfigurationTransactionFields {
+            from: sender.to_string(),
+            assetName: p.asset_name,
+            assetUnitName: p.unit_name,
+            assetDecimals: p.decimals,
+            assetTotal: p.total,
+            assetURL: p.url,
+            assetFreeze: p.freeze.map(|a| a.to_string()),
+            assetManager: p.manager.map(|a| a.to_string()),
+            assetReserve: p.reserve.map(|a| a.to_string()),
+            assetDefaultFrozen: p.default_frozen,
+        },
+        None => MyAlgoAssetConfigurationTransactionFields {
+            from: sender.to_string(),
+            assetName: None,
+            assetUnitName: None,
+            assetDecimals: None,
+            assetTotal: None,
+            assetURL: None,
+            assetFreeze: None,
+            assetManager: None,
+            assetReserve: None,
+            assetDefaultFrozen: None,
+        },
+    }
 }
 
 // https://stackoverflow.com/a/54118457/930450
