@@ -5,7 +5,7 @@ authors = ["Ivan Schuetz <ivanhp978@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-algonaut = { git = "https://github.com/manuelmauro/algonaut", branch = "prepare-0.3" }
+algonaut = { git = "https://github.com/manuelmauro/algonaut", branch = "main" }
 wasm-bindgen = "0.2.74"
 wasm-bindgen-futures = "0.4.24"
 js-sys = "0.3.51"
