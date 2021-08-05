@@ -9,12 +9,17 @@ use serde_with::skip_serializing_none;
 use wasm_bindgen::JsValue;
 
 pub fn to_my_algo_transaction(t: &Transaction) -> Result<JsValue> {
+    let value = to_my_algo_transaction_value(t)?;
+    Ok(JsValue::from_serde(&value)?)
+}
+
+pub fn to_my_algo_transaction_value(t: &Transaction) -> Result<Value> {
     let common_fields = to_my_algo_transaction_common_fields(t)?;
     let type_fields = to_my_algo_transaction_type_fields(t)?;
 
     let mut all_fields = common_fields;
     merge(&mut all_fields, type_fields);
-    Ok(JsValue::from_serde(&all_fields)?)
+    Ok(all_fields)
 }
 
 // Preferring camel case fields over #[serde(rename_all = "camelCase")]: it's convenient for text search.
