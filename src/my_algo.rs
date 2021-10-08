@@ -2,7 +2,6 @@ use crate::{bindings, to_my_algo_transaction};
 use algonaut::{core::Address, transaction::Transaction};
 use anyhow::Result;
 use log::debug;
-use wasm_bindgen::JsValue;
 
 pub struct MyAlgo {}
 
@@ -13,7 +12,8 @@ impl MyAlgo {
         let res = bindings::connect_wallet().await.map_err(|js_value| {
             anyhow::Error::msg(format!("Error connecting wallet: {:?}", js_value))
         })?;
-        let addresses: Vec<Address> = JsValue::into_serde::<Vec<String>>(&res)
+        let addresses: Vec<Address> = res
+            .into_serde::<Vec<String>>()
             .unwrap()
             .into_iter()
             .map(|s| s.parse().unwrap())
@@ -33,8 +33,7 @@ impl MyAlgo {
                 .map_err(|js_value| {
                     anyhow::Error::msg(format!("Error signing transaction: {:?}", js_value))
                 })?;
-        let signed_transaction =
-            JsValue::into_serde::<MyAlgoSignedTransaction>(&signed_transaction_js)?;
+        let signed_transaction = signed_transaction_js.into_serde::<MyAlgoSignedTransaction>()?;
         debug!("Signed transaction: {:?}", signed_transaction);
         Ok(signed_transaction)
     }
