@@ -1,6 +1,9 @@
 use algonaut::{
     core::Address,
-    transaction::{transaction::AssetParams, Transaction, TransactionType},
+    transaction::{
+        transaction::{ApplicationCallOnComplete, ApplicationCallTransaction, AssetParams},
+        Transaction, TransactionType,
+    },
 };
 use anyhow::{anyhow, Result};
 use data_encoding::{BASE32, BASE64};
@@ -99,7 +102,124 @@ fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
                 freezeState: t.frozen,
             })?)
         }
-        _ => Result::Err(anyhow!("Not supported transaction type: {:?}", t.txn_type)),
+        TransactionType::ApplicationCallTransaction(t) => to_my_algo_app_call(t),
+    }
+}
+
+fn to_my_algo_app_call(t: &ApplicationCallTransaction) -> Result<Value> {
+    let common_fields = to_my_algo_app_transaction_common_fields(t)?;
+    let type_fields = to_my_algo_app_transaction_fields(t)?;
+
+    let mut all_fields = common_fields;
+    merge(&mut all_fields, type_fields);
+    Ok(all_fields)
+}
+
+fn to_my_algo_app_transaction_common_fields(t: &ApplicationCallTransaction) -> Result<Value> {
+    Ok(serde_json::to_value(
+        &MyAlgoApplicationCommonTransactionFields {
+            from: t.sender.to_string(),
+            appArgs: t
+                .to_owned()
+                .app_arguments
+                .map(|args| args.into_iter().map(|a| BASE64.encode(&a)).collect()),
+            appAccounts: t
+                .to_owned()
+                .accounts
+                .map(|addresses| addresses.into_iter().map(|a| a.to_string()).collect()),
+            appForeignApps: t.foreign_apps.to_owned(),
+            appForeignAssets: t.foreign_assets.to_owned(),
+        },
+    )?)
+}
+
+fn to_my_algo_app_transaction_fields(t: &ApplicationCallTransaction) -> Result<Value> {
+    let my_algo_on_complete = app_on_complete_to_my_algo_index(&t.on_complete);
+
+    match (
+        &t.on_complete,
+        t.app_id,
+        &t.approval_program,
+        &t.clear_state_program,
+        &t.global_state_schema,
+        &t.local_state_schema,
+    ) {
+        (
+            ApplicationCallOnComplete::NoOp,
+            None,
+            Some(approval),
+            Some(clear),
+            Some(global_schema),
+            Some(local_schema),
+        ) => Ok(serde_json::to_value(
+            MyAlgoApplicationCreateTransactionFields {
+                appApprovalProgram: BASE64.encode(&approval.0),
+                appClearProgram: BASE64.encode(&clear.0),
+                appLocalInts: local_schema.number_ints,
+                appLocalByteSlices: local_schema.number_byteslices,
+                appGlobalInts: global_schema.number_ints,
+                appGlobalByteSlices: global_schema.number_byteslices,
+                appOnComplete: my_algo_on_complete,
+                extraPages: t.extra_pages,
+            },
+        )?),
+        (ApplicationCallOnComplete::NoOp, Some(app_id), None, None, None, None) => Ok(
+            serde_json::to_value(MyAlgoApplicationCallTransactionFields {
+                appIndex: app_id,
+                appOnComplete: my_algo_on_complete,
+            })?,
+        ),
+        (ApplicationCallOnComplete::OptIn, Some(app_id), None, None, None, None) => Ok(
+            serde_json::to_value(MyAlgoApplicationOptInTransactionFields {
+                appIndex: app_id,
+                appOnComplete: my_algo_on_complete,
+            })?,
+        ),
+        (ApplicationCallOnComplete::CloseOut, Some(app_id), None, None, None, None) => Ok(
+            serde_json::to_value(MyAlgoApplicationCloseOutTransactionFields {
+                appIndex: app_id,
+                appOnComplete: my_algo_on_complete,
+            })?,
+        ),
+        (ApplicationCallOnComplete::ClearState, Some(app_id), None, None, None, None) => Ok(
+            serde_json::to_value(MyAlgoApplicationClearTransactionFields {
+                appIndex: app_id,
+                appOnComplete: my_algo_on_complete,
+            })?,
+        ),
+        (
+            ApplicationCallOnComplete::UpdateApplication,
+            Some(app_id),
+            Some(approval),
+            Some(clear),
+            None,
+            None,
+        ) => Ok(serde_json::to_value(
+            MyAlgoApplicationUpdateTransactionFields {
+                appIndex: app_id,
+                appOnComplete: my_algo_on_complete,
+                appApprovalProgram: BASE64.encode(&approval.0),
+                appClearProgram: BASE64.encode(&clear.0),
+            },
+        )?),
+        (ApplicationCallOnComplete::DeleteApplication, Some(app_id), None, None, None, None) => Ok(
+            serde_json::to_value(MyAlgoApplicationDeleteTransactionFields {
+                appIndex: app_id,
+                appOnComplete: my_algo_on_complete,
+            })?,
+        ),
+        _ => Err(anyhow!("Invalid transaction state: {:?}", t)),
+    }
+}
+
+fn app_on_complete_to_my_algo_index(on_complete: &ApplicationCallOnComplete) -> u32 {
+    match on_complete {
+        ApplicationCallOnComplete::NoOp => 0,
+        ApplicationCallOnComplete::OptIn => 1,
+        ApplicationCallOnComplete::CloseOut => 2,
+        ApplicationCallOnComplete::ClearState => 3,
+        ApplicationCallOnComplete::UpdateApplication => 4,
+        ApplicationCallOnComplete::DeleteApplication => 5,
     }
 }
 
@@ -198,11 +318,76 @@ struct MyAlgoAssetFreezeTransactionFields {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[allow(non_snake_case)]
-struct MyAlgoApplicationCallTransactionFields {
+struct MyAlgoApplicationCommonTransactionFields {
     from: String,
-    assetIndex: u64,
-    freezeAccount: String,
-    freezeState: bool,
+    appArgs: Option<Vec<String>>,     // base64
+    appAccounts: Option<Vec<String>>, // address
+    appForeignApps: Option<Vec<u64>>,
+    appForeignAssets: Option<Vec<u64>>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[allow(non_snake_case)]
+struct MyAlgoApplicationCreateTransactionFields {
+    appApprovalProgram: String, // base64
+    appClearProgram: String,    // base64
+    appLocalInts: u64,
+    appLocalByteSlices: u64,
+    appGlobalInts: u64,
+    appGlobalByteSlices: u64,
+    appOnComplete: u32,
+    extraPages: u64,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[allow(non_snake_case)]
+struct MyAlgoApplicationCallTransactionFields {
+    appIndex: u64,
+    appOnComplete: u32,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[allow(non_snake_case)]
+struct MyAlgoApplicationOptInTransactionFields {
+    appIndex: u64,
+    appOnComplete: u32,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[allow(non_snake_case)]
+struct MyAlgoApplicationCloseOutTransactionFields {
+    appIndex: u64,
+    appOnComplete: u32,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[allow(non_snake_case)]
+struct MyAlgoApplicationClearTransactionFields {
+    appIndex: u64,
+    appOnComplete: u32,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[allow(non_snake_case)]
+struct MyAlgoApplicationUpdateTransactionFields {
+    appIndex: u64,
+    appOnComplete: u32,
+    appApprovalProgram: String, // base64
+    appClearProgram: String,    // base64
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
+#[allow(non_snake_case)]
+struct MyAlgoApplicationDeleteTransactionFields {
+    appIndex: u64,
+    appOnComplete: u32,
 }
 
 fn to_my_algo_asset_configuration_transaction_fields(
