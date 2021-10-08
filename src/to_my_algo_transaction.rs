@@ -76,7 +76,7 @@ fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
                 from: t.sender.to_string(),
                 assetIndex: t.xfer,
                 to: t.sender.to_string(),
-                amount: None,
+                amount: Some(0),
                 closeRemainderTo: None,
                 assetSender: None,
             },
