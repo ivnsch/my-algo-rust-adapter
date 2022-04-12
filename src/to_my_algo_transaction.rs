@@ -337,7 +337,7 @@ struct MyAlgoApplicationCreateTransactionFields {
     appGlobalInts: u64,
     appGlobalByteSlices: u64,
     appOnComplete: u32,
-    extraPages: u64,
+    extraPages: u32,
 }
 
 #[skip_serializing_none]
