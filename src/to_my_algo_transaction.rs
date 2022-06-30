@@ -103,6 +103,7 @@ fn to_my_algo_transaction_type_fields(t: &Transaction) -> Result<Value> {
             })?)
         }
         TransactionType::ApplicationCallTransaction(t) => to_my_algo_app_call(t),
+        TransactionType::StateProofTransaction(_) => todo!(),
     }
 }
 
@@ -233,6 +234,7 @@ fn to_api_transaction_type<'a>(type_: &TransactionType) -> &'a str {
         TransactionType::AssetClawbackTransaction(_) => "axfer",
         TransactionType::AssetFreezeTransaction(_) => "afrz",
         TransactionType::ApplicationCallTransaction(_) => "appl",
+        TransactionType::StateProofTransaction(_) => "spt",
     }
 }
 
@@ -249,6 +251,7 @@ struct MyAlgoTransactionCommonFields {
     group: Option<String>,
     lease: Option<String>,
     note: Option<Vec<u8>>,
+    #[serde(rename = "reKeyTo")]
     rekeyTo: Option<String>,
     #[serde(rename = "type")]
     type_: String,

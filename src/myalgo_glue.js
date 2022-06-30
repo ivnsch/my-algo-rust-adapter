@@ -1,4 +1,6 @@
 import MyAlgo from "@randlabs/myalgo-connect";
+import buffer from "buffer";
+const { Buffer } = buffer;
 
 const myAlgoWallet = new MyAlgo();
 
@@ -8,6 +10,7 @@ Warning: Browser will block pop-up if user doesn't trigger myAlgoWallet.connect(
 */
 // Note that we don't do try catch: This returns Result<JsValue, JsValue>, which is handled in Rust
 export const connectWallet = async () => {
+  if (!window.Buffer) window.Buffer = Buffer;
   const accounts = await myAlgoWallet.connect();
   const addresses = accounts.map((account) => account.address);
   console.log("Wallet connected! addresses: " + addresses);
@@ -17,6 +20,7 @@ export const connectWallet = async () => {
 // Note that we don't do try catch: This returns Result<JsValue, JsValue>, which is handled in Rust
 export const signTransaction = async (transaction) => {
   console.log("Transaction in js: " + JSON.stringify(transaction));
+  if (!window.Buffer) window.Buffer = Buffer;
   let signedTxn = await myAlgoWallet.signTransaction(transaction);
   signedTxn.blob = Array.from(signedTxn.blob); // Uint8Array -> array (otherwise parsing to Vec<u8> in Rust doesn't work)
   return signedTxn;
